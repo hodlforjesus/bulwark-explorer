@@ -26,12 +26,22 @@ Our geniuses here at BulwarkCorp™ have put together a script to do this for yo
 
 This will install the latest Bulwark wallet and create a rpc username/password before starting the daemon.
 
-## Install
+## Install (Linux)
 `git clone https://github.com/bulwark-crypto/bulwark-explorer.git` - copy repo to local folder.
 
-`cd blockex` - change into project directory.
+`cd bulwark-explorer` - change into project directory.
 
 `yarn install` - install packages used by the system.
+
+## Install (Windows 10 using Linux Subsystems)
+1. Add/Remove Features in Windows -> Add: Windows Subsystem for Linux, restart
+2. Install Ubuntu 18.04 from Windows App Store
+3. Run step by step commands on: https://docs.mongodb.com/manual/tutorial/install-mongodb-on-ubuntu/
+4. After installation just run `sudo mongod` on Linux terminal, `sudo mongo` on a 2nd Linux terminal
+5. Open 3rd Linux terminal, type `sudo apt install cmdtest`
+6. In Linux terminal type `cd /mnt` followed by `ls` command to list your drivers, select drive+directory where you want to install explorer
+7. Type in `git clone https://github.com/bulwark-crypto/bulwark-explorer.git`
+8. `cd bulwark-explorer` followed by `bash script/install.sh`
 
 ## Configure
 #### BlockEx API Configuration
