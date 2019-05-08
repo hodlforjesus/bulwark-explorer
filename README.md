@@ -85,6 +85,9 @@ At this time only the client web interface needs to be built using webpack and t
 
 `yarn run start:web` - will start the web, open browser [http://localhost:8081](http://localhost:8081).
 
+## Helpful scripts
+`node ./cron/clear-db.js` - removes all entries from mongodb tables: Block, Coin, Masternode, Peer, Rich, Tx, Utxo
+
 ## Test
 `yarn run test:client` - will run the client side tests.
 
