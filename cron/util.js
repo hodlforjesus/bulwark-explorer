@@ -3,10 +3,17 @@ require('babel-polyfill');
 const mongoose = require('mongoose');
 const config = require('../config');
 const { rpc } = require('../lib/cron');
+const { forEachSeries } = require('p-iteration');
 const blockchain = require('../lib/blockchain');
 const TX = require('../model/tx');
 const UTXO = require('../model/utxo');
 const BlockRewardDetails = require('../model/blockRewardDetails');
+const Address = require('../model/address');
+
+const ADDRESS_ACTIONS = {
+  VIN: 0,
+  VOUT: 1
+};
 
 /**
  * Process the inputs for the tx.
@@ -28,8 +35,10 @@ async function vin(rpctx, blockHeight) {
     
     const usedTxs = await TX.find({ txId: { $in: Array.from(usedTxIdsInVins) } }, { txId: 1, vout: 1, blockHeight: 1, createdAt: 1 }); // Only include vout, blockHeight & createdAt fields that we need
 
-    const txIds = new Set();
+    // Store addresses used in vins as key->value pair
+    let txAddressActions = new Map();
 
+    const txIds = new Set();
     rpctx.vin.forEach((vin) => {
       let vinDetails = {
         coinbase: vin.coinbase,
@@ -41,15 +50,29 @@ async function vin(rpctx, blockHeight) {
       // Find the matching vout for vin and store extra metadata for vout
       if (vin.txid) {
         let shouldStoreRelatedVout = true;
+        let walletAddressToUpdate = null;
 
         // Do not store zerocoin spend in relatedVout
         if (vin.scriptSig && vin.scriptSig.asm == 'OP_ZEROCOINSPEND') {
           vinDetails.scriptSig = { asm: vin.scriptSig.asm }; // Will allow us to identify ZEROCOIN inputs on frontend
           shouldStoreRelatedVout = false;
+          walletAddressToUpdate = "ZEROCOIN";
         }
+
+        // We will track what actions occur on a vin/vout (used for deep wallet analytics)
+        let txAddressAction = {
+          action: ADDRESS_ACTIONS.VIN,
+          txDate: new Date(rpctx.time * 1000),
+
+          // VIN specific action data
+          vin: vin,
+          vinDetails: vinDetails, // We'll update vinDetails.relatedVout.addressBalance in performTxAddressActions()
+          vinVout: null
+        };
 
         if (shouldStoreRelatedVout) {
           const txById = usedTxs.find(usedTx => usedTx.txId == vin.txid);
+
           if (!txById) {
             // Verbose console outputs of the unsupported TX so we can easily debug TXs we don't support for inputs
             console.log("Unsupported TX:");
@@ -61,14 +84,25 @@ async function vin(rpctx, blockHeight) {
           }
 
           const vinVout = txById.vout.find(vout => vout.n == vin.vout); // Notice how we are accessing by vout number instead of by index (as some vouts are not stored like POS)
+          walletAddressToUpdate = vinVout.address;
+
           vinDetails.relatedVout = {
             value: vinVout.value,
             address: vinVout.address,
             confirmations: blockHeight - txById.blockHeight,
             date: txById.createdAt,
-            age: rpctx.time - txById.createdAt.getTime() / 1000,
+            age: rpctx.time - txById.createdAt.getTime() / 1000
           };
+
+          txAddressAction.vinRelatedVout = vinVout;
+          txAddressAction.vinVout = vinVout;
         }
+
+        // Store all addresses used in vin in a hash. That way we can fetch them all in a single query at once and replay them as they occured adding address balance
+        if (!txAddressActions.has(walletAddressToUpdate)) {
+          txAddressActions.set(walletAddressToUpdate, []);
+        }
+        txAddressActions.get(walletAddressToUpdate).push(txAddressAction);
       }
 
       txin.push(vinDetails);
@@ -76,9 +110,12 @@ async function vin(rpctx, blockHeight) {
       txIds.add(`${vin.txid}:${vin.vout}`);
     });
 
+    // Update address balance & analytics based on vins
+    await performTxAddressActions(txAddressActions);
+
     // Remove unspent transactions.
     if (txIds.size) {
-      await UTXO.remove({ _id: { $in: Array.from(txIds) } });
+      //await UTXO.remove({ _id: { $in: Array.from(txIds) } });
     }
   }
   return txin;
@@ -90,6 +127,9 @@ async function vin(rpctx, blockHeight) {
  * @param {Number} blockHeight The block height for the tx.
  */
 async function vout(rpctx, blockHeight) {
+  // Store addresses used in vouts as key->value pair
+  let txAddressActions = new Map();
+
   // Setup the outputs for the transaction.
   const txout = [];
   if (rpctx.vout) {
@@ -114,11 +154,22 @@ async function vout(rpctx, blockHeight) {
           break;
       }
 
+
       const to = {
         blockHeight,
         address: toAddress,
         n: vout.n,
         value: vout.value
+      };
+      
+      // We will track what actions occur on a vin/vout (used for deep wallet analytics)
+      let txAddressAction = {
+        txDate: new Date(rpctx.time * 1000),
+        action: ADDRESS_ACTIONS.VOUT,
+
+        // VOUT specific action data
+        vout: vout,
+        voutDetails: to
       };
 
       // Always add UTXO since we'll be aggregating it in richlist
@@ -129,16 +180,90 @@ async function vout(rpctx, blockHeight) {
       });
 
       if (toAddress != 'NON_STANDARD') {
+
         txout.push(to);
       }
+      
+      // Store all addresses used in vin in a hash. That way we can fetch them all in a single query at once and replay them as they occured adding address balance
+      if (!txAddressActions.has(toAddress)) {
+        txAddressActions.set(toAddress, []);
+      }
+      txAddressActions.get(toAddress).push(txAddressAction);
     });
+
+    // Update address balance & analytics based on vins
+    await performTxAddressActions(txAddressActions);
 
     // Insert unspent transactions.
     if (utxo.length) {
-      await UTXO.insertMany(utxo);
+      //await UTXO.insertMany(utxo);
     }
   }
   return txout;
+}
+
+/**
+ * Replays the vin/vout transactions performing deep analytics on an address
+ * @param {Map<string,object>} txAddressActions key is wallet address. value is peformed action (ex: VIN = spend, VOUT = receive)
+ */
+async function performTxAddressActions(txAddressActions) {
+  if (txAddressActions.size == 0) {
+    return;
+  }
+
+  // Grab all addresses used in vin/vout in a single query
+  const usedTxAddresses = await Address.find({ address: { $in: Array.from(txAddressActions.keys()) } }); //@todo include only columns we need
+  for (let txAddressMapItem of txAddressActions) { // parallel-friendly foreach
+    const txAddress = txAddressMapItem[0];
+    let addressTransactions = txAddressMapItem[1];
+
+
+    let usedTxAddress = usedTxAddresses.find(usedTxAddress => usedTxAddress.address == txAddress)
+    if (!usedTxAddress) {
+      usedTxAddress = new Address({
+        _id: new mongoose.Types.ObjectId(),
+
+        address: txAddress,
+        balance: 0,
+      
+        // Deep analytics
+        stakeRewardsCount: 0,
+        mnRewardsCount: 0,
+        stakeRewardsSum: 0,
+        mnRewardsSum: 0,
+        txsInCount: 0,
+        txsOutCount: 0,
+        firstTxDate: null, // Will be set below
+        lastTxDate: null, // Will be set below
+        totalValueIn: 0,
+        totalValueOut: 0,
+      });
+      usedTxAddresses.push(usedTxAddress);
+    }
+
+    for (let addressTransaction of addressTransactions) { // parallel-friendly foreach
+      switch (addressTransaction.action) {
+        case ADDRESS_ACTIONS.VIN:
+          // Sometimes we won't have realtedVout (ex: ZEROCOIN)
+          if (addressTransaction.vinDetails.relatedVout) {
+            // Store previous address balance prior to vin spend
+            addressTransaction.vinDetails.relatedVout.addressBalance = usedTxAddress.balance;
+          }
+          usedTxAddress.balance -= addressTransaction.vinDetails.relatedVout.value;
+          break;
+        case ADDRESS_ACTIONS.VOUT:
+          usedTxAddress.balance += addressTransaction.voutDetails.value;
+          break;
+      }
+      
+      usedTxAddress.lastTxDate = addressTransaction.txDate;
+      if (!usedTxAddress.firstTxDate) {
+        usedTxAddress.firstTxDate = usedTxAddress.lastTxDate;
+      }
+    }
+    
+    await usedTxAddress.save();
+  }
 }
 
 /**
