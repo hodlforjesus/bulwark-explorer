@@ -6,10 +6,12 @@ const mongoose = require('mongoose');
  */
 const RelatedVout = new mongoose.Schema({
   address: { index: false, required: true, type: String },
+  addressBalance: { index: true, required: true, type: Number }, // Store address balance before the transaction input was spent
+
   value: { required: true, type: Number },
   confirmations: { required: true, type: Number },
   date: { index: true, required: true, type: Date },
-  age: { index: true, required: true, type: Number },
+  age: { index: true, required: true, type: Number },  
 }, { _id: false, versionKey: false });
 
 /**
