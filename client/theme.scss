@@ -102,43 +102,34 @@ html, body {
 	overflow-x: hidden;
 	width: 100vw;
 }
-
 a, a:visited {
 	color: $gray-dark;
 	text-decoration: none;
 }
-
 a:hover {
 	color: $blue;
 	text-decoration: none;
 	transition: all 1s cubic-bezier(0, 1, .5, 1);
 }
-
 h1, h2, h3, h4, h5, h6 {
 	display: inline-block;
 	font-weight: bolder;
 }
-
 #react-app {
 	height: 100%;
 }
-
 .page-wrapper {
 	display: flex;
 	flex-direction: row;
 	height: 100%;
-
 	@include media-breakpoint-down(sm) {
 		flex-direction: column;
 	}
-
 }
-
 .menu-wrapper {
 	display: flex;
 	z-index: $zindex-fixed;
 }
-
 .badge {
 	border-radius: 2.5px;
 	color: $black;
@@ -155,65 +146,58 @@ h1, h2, h3, h4, h5, h6 {
 	padding: .2em .6em;
 	text-align: center;
 	text-transform: uppercase;
-
 	&-danger {
 		color: $white !important;
 	}
-
 	&-info {
 		color: $white !important;
 	}
-
 	&-success {
 		color: $white !important;
 	}
 }
-
 // Content Wrapper
 .content {
 	flex: 1;
 	overflow-y: auto;
-
 	@media (min-width: 1600px) {
 		padding-left: $menu-width-open;
 		padding-right: $menu-width-open;
 	}
-
 	@include media-breakpoint-down(sm) {
 		margin-top: $menu-mobile-height;
 	}
-
-	/* Static Footer
+/* Static Footer
 	@include media-breakpoint-up(md) {
 		margin-bottom: 159px;
-	}
-
+	};
 	@include media-breakpoint-up(lg) {
 		margin-bottom: 112px;
 	}
 	*/
-
 	&__inner-wrapper {
 		min-height: 50vh;
 	}
-
-    &__wrapper {
+	&__wrapper {
 		background-color: $white;
-	    margin: 0 auto;
+		margin: 0 auto;
 		min-height: 80vh;
 		overflow-x: hidden;
 		padding: 1em 2em 2em;
-	    position: relative;
+		position: relative;
 		transition: all 1s cubic-bezier(0, 1, .5, 1);
-    }
-
-    /*Set margin for content offset*/
+		
+		// Smaller padding on sides for mobile & add padding for top nav
+		@include media-breakpoint-down(sm) {
+			padding: 5em 0.5em 5em 0.5em;
+		}
+	}
+	/*Set margin for content offset*/
 	& + div .menu-desktop--close + & {
-	    margin-left: $menu-width-close;
+		margin-left: $menu-width-close;
 		transition: all 1s cubic-bezier(0, 1, .5, 1);
 	}
 }
-
 .scroller {
 	background-color: transparentize($gray, .5);
 	bottom: 2em;
@@ -222,17 +206,13 @@ h1, h2, h3, h4, h5, h6 {
 	cursor: pointer;
 	position: fixed;
 	right: 2em;
-
 	&__icon {
 		font-size: 3em;
 	}
-
 }
-
 .text-gray {
 	color: lighten($gray-dark, 20%);
 }
-
 .mb-3 {
 	margin-bottom: 3px;
 }
