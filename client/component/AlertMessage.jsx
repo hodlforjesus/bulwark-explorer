@@ -31,6 +31,8 @@ const AlertMessage = () => {
     aria-describedby="alert-dialog-description"
     fullWidth={true}
     maxWidth={'lg'}
+    disableBackdropClick
+    disableEscapeKeyDown
   >
     <DialogTitle id="alert-dialog-title">📢📢 IMPORTANT Datamine (DAM) Swap Details 📢📢</DialogTitle>
     <DialogContent>
