@@ -35,6 +35,7 @@ import Loading from './component/Loading';
 import Menu from './component/Menu';
 import Notification from './component/Notification';
 import SearchBar from './component/SearchBar';
+import AlertMessage from './component/AlertMessage'
 
 class App extends Component {
   static propTypes = {
@@ -182,6 +183,7 @@ class App extends Component {
               <Footer />
             </div>
           </div>
+          <AlertMessage />
         </div>
       </HashRouter>
     );
