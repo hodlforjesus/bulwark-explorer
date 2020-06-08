@@ -306,6 +306,10 @@ async function undoCarverBlockMovements(height) {
     parsedMovements.forEach(parsedMovement => {
       sequence = parsedMovement.sequence;
 
+      if (!parsedMovement.carverAddress) {
+        return;
+      }
+
       const carverAddress = updatedAddresses.has(parsedMovement.carverAddress.label) ? updatedAddresses.get(parsedMovement.carverAddress.label) : parsedMovement.carverAddress;
 
 
